@@ -1,0 +1,160 @@
+---
+title: "SDS 390: Exploring the Statistical Implications of Study Design and Sampling Schemes"
+date: "February 8, 2024"
+format: 
+  pdf:
+    keep-tex: true
+    include-in-header: 
+       text: |
+         \usepackage{fvextra}
+         \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+         \DefineVerbatimEnvironment{OutputCode}{Verbatim}{breaklines,commandchars=\\\{\}}
+    geometry: 
+      - left=1in
+      - right=1in
+      - top=1in
+      - bottom=1in
+---
+
+```{r}
+#| include: false
+
+# A helper function to quickly calculate marginal proportions of interest
+calc_marginal <- function(dat){
+  p_copd <- mean(dat$disease == "COPD")
+  p_no_copd <- mean(dat$disease == "no COPD")
+  p_cannabis <- mean(dat$exposure == "CBD use")
+  p_no_cannabis <- mean(dat$exposure == "no CBD use")
+  return(data.frame(p_copd = p_copd, p_no_copd = p_no_copd, p_cannabis = p_cannabis, p_no_cannabis = p_no_cannabis))
+}
+
+# A helper function to quickly calculate joint proportions of interest
+calc_joint <- function(dat){
+  p_copd_cannabis <- mean(dat$disease == "COPD" & dat$exposure == "CBD use")
+  p_no_copd_cannabis <- mean(dat$disease == "no COPD" & dat$exposure == "CBD use")
+  p_copd_no_cannabis <- mean(dat$disease == "COPD" & dat$exposure == "no CBD use")
+  p_no_copd_no_cannabis <- mean(dat$disease == "no COPD" & dat$exposure == "no CBD use")
+  return(data.frame(p_copd_cannabis = p_copd_cannabis, p_no_copd_cannabis = p_no_copd_cannabis, p_copd_no_cannabis = p_copd_no_cannabis, p_no_copd_no_cannabis = p_no_copd_no_cannabis))
+}
+
+# A helper function to quickly calculate proportions conditional on exposure status
+calc_conditional_on_exposure <- function(dat){
+  p_copd_given_cannabis <- mean(dat$disease[dat$exposure == "CBD use"] == "COPD")
+  p_copd_given_no_cannabis <- mean(dat$disease[dat$exposure == "no CBD use"] == "COPD")
+  return(data.frame(p_copd_given_cannabis =  p_copd_given_cannabis, p_copd_given_no_cannabis = p_copd_given_no_cannabis))
+}
+
+# A helper function to quickly calculate proportions conditional on disease status
+calc_conditional_on_disease <- function(dat){
+  p_cannabis_given_copd <- mean(dat$exposure[dat$disease == "COPD"] == "CBD use")
+  p_cannabis_given_no_copd <- mean(dat$exposure[dat$disease == "no COPD"] == "CBD use")
+  return(data.frame(p_cannabis_given_copd =  p_cannabis_given_copd, p_cannabis_given_no_copd = p_cannabis_given_no_copd))
+}
+```
+
+# Our Full Population
+
+Imagine, for a moment, that we want to understand the distribution and determinants of disease within Everytown, USA, a community with a population of 30,000 individuals! We're particularly interested in studying the relationship between cannabis use and chronic obstructive pulmonary disease (COPD), a type of inflammatory lung disease that can make it difficult to breath. In this context, cannabis use represents our exposure ($X$) and COPD represents our disease ($Y$).
+
+```{r}
+# Creating the population data for Everytown, USA
+pop_data <- data.frame(disease = c(rep("COPD", 2500), 
+                                   rep("no COPD", 27500)),
+                       exposure = c(rep("CBD use", 1500), 
+                                    rep("no CBD use", 1000), 
+                                    rep("CBD use", 8500), 
+                                    rep("no CBD use", 19000)))
+```
+
+The contingency table summarizing the full population is shown below:
+
+```{r}
+# Displaying that data in a contingency table
+table(pop_data$exposure, pop_data$disease)
+```
+
+Focusing first on the marginal distribution of disease (COPD) and exposure (cannabis use) in Everytown, we find that:
+
+-   33.3% of all residents (10,000 individuals) use cannabis: $P(X = 1) = 0.33$
+-   8.3% of all residents (2,500 individuals) have COPD: $P(Y = 1) = 0.083$
+
+```{r}
+# Calculating the overall proportion of residents who use cannabis
+mean(pop_data$exposure == "CBD use")
+
+# Calculating the overall proportion of residents who have COPD
+mean(pop_data$disease == "COPD")
+```
+
+We also note that there are higher rates of COPD among cannabis users than non-users:
+
+-   15% of all cannabis users reported a COPD diagnosis: $P(Y = 1 | X = 1) = 0.15$
+-   5% of all non-users of cannabis reported COPD: $P(Y = 1 | X = 0) = 0.05$
+
+```{r}
+# Calculating proportions that are conditional on exposure status
+#   margin = 1 calculates proportions within each row
+table(pop_data$exposure, pop_data$disease) |> prop.table(margin = 1) 
+```
+
+Similarly, there are higher rates of cannabis use among those diagnosed with COPD than those without COPD:
+
+-   60% of all individuals with COPD use cannabis: $P(X = 1 | Y = 1) = 0.60$
+-   30.9% of all individuals without COPD use cannabis: $P(X = 1 | Y = 0) = 0.309$,
+
+```{r}
+# Calculating proportions that are conditional on disease status
+#   margin = 2 calculates proportions within each row
+table(pop_data$exposure, pop_data$disease) |> prop.table(margin = 2) 
+```
+
+# Sampling Observations From the Population
+
+We don't have the time, energy, or budget to collect cannabis use data and COPD data on all members of Everytown. Suppose we decide instead to conduct a study using $n = 5000$ population members.
+
+## Cross-Sectional Study: Taking a Population-Based Sample
+
+In a cross-sectional study, we sample a subset of $n = 5000$ population members *without* regard to either their cannabis habits or their COPD diagnosis:
+
+```{r}
+set.seed(112358)
+
+# Taking the population-based sample
+n <- 5000
+pop_sample <- pop_data[sample(1:nrow(pop_data), n, replace = FALSE), ]
+
+# Contingency table of the study data
+table(pop_sample$exposure, pop_sample$disease) |> addmargins()
+```
+
+## Cohort Study: Taking an Exposure-Based Sample
+
+In a cohort study, we might select our sample of $n = 5000$ population members by sampling $n_1 = 2500$ cannabis users and $n_0 = 2500$ non-users and then ascertaining their COPD status:
+
+```{r}
+# Taking the exposure-based sample
+n1 <- 2500
+n0 <- 2500
+exp_sample <- rbind(pop_data[sample(which(pop_data$exposure=="CBD use"), n1), ],
+                    pop_data[sample(which(pop_data$exposure=="no CBD use", ), n0), ])
+
+
+# Contingency table of the study data
+table(exp_sample$exposure, exp_sample$disease) |> addmargins()
+```
+
+## Case-Control Study: Taking a Disease-Based Sample
+
+Finally, in a case-control study, we select our sample conditional on their disease status. For example, we might select $n_1 = 1000$ individuals with COPD and $n_0 = 4000$ individuals without COPD and look backward to determine their cannabis use: 
+
+```{r}
+# Taking the disease-based sample
+n1 <- 1000
+n0 <- 4000
+cc_sample <- rbind(pop_data[sample(which(pop_data$disease=="COPD"), n1), ],
+                    pop_data[sample(which(pop_data$disease=="no COPD", ), n0), ])
+
+
+# Contingency table of the study data
+table(cc_sample$exposure, cc_sample$disease) |> addmargins()
+```
